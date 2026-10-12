@@ -1244,11 +1244,20 @@ static void IN_ProcessEvents( void )
 IN_Frame
 ===============
 */
+#ifdef __IPHONEOS__
+extern void IOS_TouchControls_Frame( int mode );
+#endif
+
 void IN_Frame( void )
 {
 	qboolean loading;
 
 	IN_JoyMove( );
+
+#ifdef __IPHONEOS__
+	// on-screen controls only while playing; menus and loading get SDL's touch->mouse emulation
+	IOS_TouchControls_Frame( clc.state == CA_ACTIVE && !( Key_GetCatcher( ) & ( KEYCATCH_CONSOLE | KEYCATCH_UI ) ) );
+#endif
 
 	// If not DISCONNECTED (main menu) or ACTIVE (in game), we're loading
 	loading = ( clc.state != CA_DISCONNECTED && clc.state != CA_ACTIVE );
@@ -1319,7 +1328,10 @@ void IN_Init( void *windowData )
 	SDL_EventState( SDL_DROPFILE, SDL_ENABLE );
 #endif
 
+#ifndef __IPHONEOS__
+	// On iOS this would show the on-screen keyboard permanently; it has to be enabled explicitly (chat/console)
 	SDL_StartTextInput( );
+#endif
 
 	mouseAvailable = ( in_mouse->value != 0 );
 	IN_DeactivateMouse( Cvar_VariableIntegerValue( "r_fullscreen" ) != 0 );
