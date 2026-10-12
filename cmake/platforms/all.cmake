@@ -1,4 +1,5 @@
 include(platforms/emscripten)
+include(platforms/ios)
 include(platforms/linux)
 include(platforms/macos)
 include(platforms/unix)

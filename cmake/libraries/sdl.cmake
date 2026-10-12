@@ -13,8 +13,8 @@ set(INTERNAL_SDL_DIR ${SOURCE_DIR}/thirdparty/SDL2-2.32.8)
 
 include(utils/arch)
 
-if(WIN32 OR APPLE)
-    # On Windows and macOS we have internal SDL binaries we can use
+if(WIN32 OR (APPLE AND NOT IOS))
+    # On Windows and macOS we have internal SDL binaries we can use (none for iOS, see platforms/ios.cmake)
     set(HAVE_INTERNAL_SDL true)
 endif()
 

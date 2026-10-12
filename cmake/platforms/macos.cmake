@@ -1,6 +1,6 @@
 # macOS specific settings
 
-if(NOT APPLE)
+if(NOT APPLE OR IOS)
     return()
 endif()
 

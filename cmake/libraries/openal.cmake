@@ -10,7 +10,8 @@ set(INTERNAL_OPENAL_DIR ${SOURCE_DIR}/thirdparty/openal-soft-1.24.3)
 
 find_package(OpenAL QUIET)
 
-if(NOT OpenAL_FOUND)
+# On iOS there is no system OpenAL with alext.h; use the OpenAL Soft build given by OPENAL_LIBRARY/OPENAL_INCLUDE_DIR
+if(NOT OpenAL_FOUND AND NOT (IOS AND OPENAL_LIBRARY AND OPENAL_INCLUDE_DIR))
     set(OPENAL_DEFINITIONS USE_INTERNAL_OPENAL_HEADERS)
     set(OPENAL_INCLUDE_DIR ${INTERNAL_OPENAL_DIR}/include)
     set(OPENAL_LIBRARY openal)
