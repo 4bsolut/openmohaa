@@ -241,7 +241,8 @@ Sys_InitPIDFile
 */
 void Sys_InitPIDFile( const char *gamedir ) {
 	if( Sys_WritePIDFile( gamedir ) ) {
-#ifndef DEDICATED
+		// iOS suspends and kills apps at any time, a stale PID file does not mean the video settings are bad
+#if !defined(DEDICATED) && !defined(__IPHONEOS__)
 		char message[1024];
 		char modName[MAX_OSPATH];
 
@@ -834,6 +835,12 @@ int main( int argc, char **argv )
 	Sys_ParseArgs( argc, argv );
 	Sys_SetBinaryPath( Sys_Dirname( argv[ 0 ] ) );
 	Sys_SetDefaultInstallPath( DEFAULT_BASEDIR );
+
+#ifdef __IPHONEOS__
+	// Apps are started from the home screen without arguments: always keep the console log (flushed on every write,
+	// Library/Application Support/openmohaa/main/qconsole.log) so problems can be diagnosed afterwards
+	Q_strcat( commandLine, sizeof( commandLine ), "+set logfile 2 " );
+#endif
 
 	// Concatenate the command line for passing to Com_Init
 	for( i = 1; i < argc; i++ )
