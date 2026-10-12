@@ -18,6 +18,9 @@ or (at your option) any later version.
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
@@ -99,4 +102,108 @@ char *Sys_StripAppBundle( char *dir )
 
 	Com_sprintf( documents, sizeof( documents ), "%s/Documents", home );
 	return documents;
+}
+
+/*
+=================
+IOS_ChooseTargetGame
+
+OpenMoHAA picks the game (and its data folder) from com_target_game, which can only be set at startup:
+0 = Allied Assault (main), 1 = Spearhead (mainta), 2 = Breakthrough (maintt).
+An iOS app cannot be launched with arguments, so ask before the engine starts. Only the versions whose
+folder exists next to main/ are offered; with a single one installed there is nothing to ask.
+The last choice is remembered and highlighted. Returns -1 when the command line already set it.
+=================
+*/
+static const char *IOS_ArgValue( int argc, char **argv, const char *name )
+{
+	for ( int i = 1; i + 2 < argc; i++ ) {
+		if ( !strcmp( argv[i], "+set" ) && !strcmp( argv[i + 1], name ) ) {
+			return argv[i + 2];
+		}
+	}
+	return NULL;
+}
+
+static qboolean IOS_FolderExists( const char *base, const char *dir )
+{
+	char        path[MAX_OSPATH];
+	struct stat st;
+
+	Com_sprintf( path, sizeof( path ), "%s/%s", base, dir );
+	return stat( path, &st ) == 0 && S_ISDIR( st.st_mode );
+}
+
+int IOS_ChooseTargetGame( int argc, char **argv )
+{
+	static const char *const folders[3] = { "main", "mainta", "maintt" };
+	static const char *const labels[3]  = { "Allied Assault", "Spearhead", "Breakthrough" };
+	char                     base[MAX_OSPATH];
+	char                     lastPath[MAX_OSPATH];
+	const char              *home = getenv( "HOME" );
+	const char              *arg;
+	SDL_MessageBoxButtonData buttons[3];
+	SDL_MessageBoxData       data;
+	int                      available[3];
+	int                      count = 0, last = 0, buttonId = -1;
+	FILE                    *f;
+
+	if ( IOS_ArgValue( argc, argv, "com_target_game" ) ) {
+		return -1;
+	}
+
+	// same default as Sys_StripAppBundle: <app>/Documents, or fs_basepath when given
+	arg = IOS_ArgValue( argc, argv, "fs_basepath" );
+	if ( arg ) {
+		Q_strncpyz( base, arg, sizeof( base ) );
+	} else if ( home && *home ) {
+		Com_sprintf( base, sizeof( base ), "%s/Documents", home );
+	} else {
+		return -1;
+	}
+
+	for ( int g = 0; g < 3; g++ ) {
+		if ( IOS_FolderExists( base, folders[g] ) ) {
+			available[count++] = g;
+		}
+	}
+
+	// Spearhead and Breakthrough need main/ too: with no expansion there is no choice to make
+	if ( count <= 1 ) {
+		return -1;
+	}
+
+	Com_sprintf( lastPath, sizeof( lastPath ), "%s/Library/Application Support/openmohaa/target_game", home ? home : "." );
+	if ( ( f = fopen( lastPath, "r" ) ) != NULL ) {
+		int v = 0;
+		if ( fscanf( f, "%d", &v ) == 1 && v >= 0 && v <= 2 ) {
+			last = v;
+		}
+		fclose( f );
+	}
+
+	for ( int i = 0; i < count; i++ ) {
+		buttons[i].flags    = ( available[i] == last ) ? SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT : 0;
+		buttons[i].buttonid = available[i];
+		buttons[i].text     = labels[available[i]];
+	}
+
+	data.flags       = SDL_MESSAGEBOX_INFORMATION;
+	data.window      = NULL;
+	data.title       = "MOHAA Mobile";
+	data.message     = "¿Qué versión del juego quieres cargar?";
+	data.numbuttons  = count;
+	data.buttons     = buttons;
+	data.colorScheme = NULL;
+
+	if ( SDL_ShowMessageBox( &data, &buttonId ) < 0 || buttonId < 0 || buttonId > 2 ) {
+		buttonId = last;
+	}
+
+	if ( ( f = fopen( lastPath, "w" ) ) != NULL ) {
+		fprintf( f, "%d\n", buttonId );
+		fclose( f );
+	}
+
+	return buttonId;
 }

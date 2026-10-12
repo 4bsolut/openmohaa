@@ -780,6 +780,10 @@ void Sys_SigHandler( int signum )
 main
 =================
 */
+#ifdef __IPHONEOS__
+extern int IOS_ChooseTargetGame( int argc, char **argv );
+#endif
+
 int main( int argc, char **argv )
 {
 	int   i;
@@ -840,6 +844,15 @@ int main( int argc, char **argv )
 	// Apps are started from the home screen without arguments: always keep the console log (flushed on every write,
 	// Library/Application Support/openmohaa/main/qconsole.log) so problems can be diagnosed afterwards
 	Q_strcat( commandLine, sizeof( commandLine ), "+set logfile 2 " );
+
+	// Allied Assault, Spearhead or Breakthrough: com_target_game can only be set at startup, so ask now
+	{
+		int targetGame = IOS_ChooseTargetGame( argc, argv );
+
+		if ( targetGame >= 0 ) {
+			Q_strcat( commandLine, sizeof( commandLine ), va( "+set com_target_game %d ", targetGame ) );
+		}
+	}
 #endif
 
 	// Concatenate the command line for passing to Com_Init
