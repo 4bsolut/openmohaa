@@ -246,6 +246,11 @@ static void GLSL_PrintLog(GLuint programOrShader, glslPrintLog_t type, qboolean 
 static void GLSL_GetShaderHeader( GLenum shaderType, const GLchar *extra, char *dest, int size )
 {
 	float fbufWidthScale, fbufHeightScale;
+	// mediump is fp16 on mobile GPUs: far too coarse for vertex positions/matrices (walls tear), so use highp
+	// there, and in fragment shaders whenever the GPU supports it
+	const char *floatPrecision = ( shaderType == GL_VERTEX_SHADER )
+		? "precision highp float;\n"
+		: "#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n";
 
 	dest[0] = '\0';
 
@@ -267,7 +272,7 @@ static void GLSL_GetShaderHeader( GLenum shaderType, const GLchar *extra, char *
 
 		if (qglesMajorVersion >= 2)
 		{
-			Q_strcat(dest, size, "precision mediump float;\n");
+			Q_strcat(dest, size, floatPrecision);
 			Q_strcat(dest, size, "precision mediump sampler2DShadow;\n");
 		}
 
@@ -298,7 +303,7 @@ static void GLSL_GetShaderHeader( GLenum shaderType, const GLchar *extra, char *
 				Q_strcat(dest, size, extra);
 			}
 
-			Q_strcat(dest, size, "precision mediump float;\n");
+			Q_strcat(dest, size, floatPrecision);
 
 			if (glRefConfig.shadowSamplers)
 			{
