@@ -39,15 +39,16 @@ or (at your option) any later version.
 
 #define MAX_TRACKED_TOUCHES 10
 #define STICK_RADIUS        62.0   // points of finger travel for full deflection at scale 1
-#define STICK_DEADZONE      0.10
+#define STICK_DEADZONE      0.08
 #define STICK_ZONE_WIDTH    0.42   // left fraction of the screen where a touch starts the stick
 #define BUTTON_SLOP         10.0   // extra points around a button that still hit it
 #define KEY_EDIT_LAYOUT     (-1)   // pseudo key: opens the HUD editor
 #define LAYOUT_DEFAULTS_KEY @"MohaaTouchLayout.v2"
 #define LOOK_DEFAULTS_KEY   @"MohaaTouchLook"
 #define LOOK_ADS_DEFAULTS_KEY @"MohaaTouchLookADS"
+#define MOVE_FULL_DEFAULTS_KEY @"MohaaTouchMoveFull"
 
-typedef enum { ROLE_NONE, ROLE_STICK, ROLE_LOOK, ROLE_BUTTON, ROLE_EDIT_DRAG } touchRole_t;
+typedef enum { ROLE_NONE, ROLE_STICK, ROLE_LOOK, ROLE_LOOK_WAIT, ROLE_BUTTON, ROLE_EDIT_DRAG } touchRole_t;
 
 typedef struct {
 	const char *name;   // shown in the editor
@@ -99,6 +100,7 @@ typedef struct {
 
 static cvar_t *touch_look;     // degrees per point of finger travel
 static cvar_t *touch_look_ads; // multiplier of touch_look while the secondary fire (aim) button is held
+static cvar_t *touch_move_full; // stick travel fraction that reaches full movement speed
 static cvar_t *touch_leanstrafe;
 static cvar_t *touch_lean_start;
 static cvar_t *touch_lean_stop;
@@ -137,9 +139,11 @@ static cvar_t *touch_startedit;
 	UILabel       *_opacityValue;
 	UISlider      *_camSlider;
 	UISlider      *_adsSlider;
+	UISlider      *_moveSlider;
 	UILabel       *_camValue;
 	UILabel       *_adsValue;
-	float          _savedLook, _savedAds;
+	UILabel       *_moveValue;
+	float          _savedLook, _savedAds, _savedMove;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -266,8 +270,10 @@ static cvar_t *touch_startedit;
 	NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
 	if ( [ud objectForKey:LOOK_DEFAULTS_KEY] ) Cvar_Set( "touch_look", va( "%g", [ud floatForKey:LOOK_DEFAULTS_KEY] ) );
 	if ( [ud objectForKey:LOOK_ADS_DEFAULTS_KEY] ) Cvar_Set( "touch_look_ads", va( "%g", [ud floatForKey:LOOK_ADS_DEFAULTS_KEY] ) );
+	if ( [ud objectForKey:MOVE_FULL_DEFAULTS_KEY] ) Cvar_Set( "touch_move_full", va( "%g", [ud floatForKey:MOVE_FULL_DEFAULTS_KEY] ) );
 	_savedLook = touch_look->value;
 	_savedAds  = touch_look_ads->value;
+	_savedMove = touch_move_full->value;
 }
 
 - (void)saveCfg
@@ -281,9 +287,11 @@ static cvar_t *touch_startedit;
 	[ud setObject:all forKey:LAYOUT_DEFAULTS_KEY];
 	[ud setFloat:touch_look->value forKey:LOOK_DEFAULTS_KEY];
 	[ud setFloat:touch_look_ads->value forKey:LOOK_ADS_DEFAULTS_KEY];
+	[ud setFloat:touch_move_full->value forKey:MOVE_FULL_DEFAULTS_KEY];
 	memcpy( _saved, _cfg, sizeof( _cfg ) );
 	_savedLook = touch_look->value;
 	_savedAds  = touch_look_ads->value;
+	_savedMove = touch_move_full->value;
 }
 
 - (CGPoint)centreOf:(size_t)i
@@ -503,7 +511,7 @@ static cvar_t *touch_startedit;
 	UIColor *yellow = [UIColor colorWithRed:1 green:0.85 blue:0.1 alpha:1];
 	UIColor *cyan   = [UIColor colorWithRed:0.62 green:0.84 blue:0.9 alpha:1];
 
-	_panel = [[UIView alloc] initWithFrame:CGRectMake( 0, 0, 470, 262 )];
+	_panel = [[UIView alloc] initWithFrame:CGRectMake( 0, 0, 470, 296 )];
 	_panel.backgroundColor    = [UIColor colorWithWhite:0.18 alpha:0.92];
 	_panel.layer.cornerRadius = 8;
 	_panel.clipsToBounds      = YES;
@@ -590,14 +598,27 @@ static cvar_t *touch_startedit;
 	_adsValue.frame = CGRectMake( 268, 180, 70, 24 );
 	[_panel addSubview:_adsValue];
 
+	UILabel *move = [self panelLabel:@"Recorrido al correr" size:13];
+	move.frame = CGRectMake( 12, 212, 135, 24 );
+	[_panel addSubview:move];
+	_moveSlider = [[UISlider alloc] initWithFrame:CGRectMake( 150, 212, 110, 24 )];
+	_moveSlider.minimumValue = 0.45;
+	_moveSlider.maximumValue = 1.0;
+	[self styleSlider:_moveSlider];
+	[_moveSlider addTarget:self action:@selector( moveChanged ) forControlEvents:UIControlEventValueChanged];
+	[_panel addSubview:_moveSlider];
+	_moveValue = [self panelLabel:@"" size:12];
+	_moveValue.frame = CGRectMake( 268, 212, 70, 24 );
+	[_panel addSubview:_moveValue];
+
 	UIButton *reset = [self panelButton:@"RESTABLECER" color:[UIColor colorWithRed:0.9 green:0.25 blue:0.25 alpha:1] textColor:UIColor.whiteColor action:@selector( resetPressed )];
-	reset.frame     = CGRectMake( 12, 218, 140, 34 );
+	reset.frame     = CGRectMake( 12, 252, 140, 34 );
 	[_panel addSubview:reset];
 	UIButton *exitBtn = [self panelButton:@"SALIR" color:cyan textColor:UIColor.blackColor action:@selector( exitPressed )];
-	exitBtn.frame     = CGRectMake( 165, 218, 140, 34 );
+	exitBtn.frame     = CGRectMake( 165, 252, 140, 34 );
 	[_panel addSubview:exitBtn];
 	UIButton *save = [self panelButton:@"GUARDAR Y USAR" color:yellow textColor:UIColor.blackColor action:@selector( savePressed )];
-	save.frame     = CGRectMake( 318, 218, 140, 34 );
+	save.frame     = CGRectMake( 318, 252, 140, 34 );
 	[_panel addSubview:save];
 
 	[self addSubview:_panel];
@@ -622,6 +643,12 @@ static cvar_t *touch_startedit;
 	_adsValue.text = [NSString stringWithFormat:@"x%.2f", _adsSlider.value];
 }
 
+- (void)moveChanged
+{
+	Cvar_Set( "touch_move_full", va( "%.3f", _moveSlider.value ) );
+	_moveValue.text = [NSString stringWithFormat:@"%d %%", (int)lroundf( _moveSlider.value * 100 )];
+}
+
 - (void)layoutPanel
 {
 	CGRect s      = [self safeRect];
@@ -637,6 +664,7 @@ static cvar_t *touch_startedit;
 	memcpy( _saved, _cfg, sizeof( _cfg ) );
 	_savedLook    = touch_look->value;
 	_savedAds     = touch_look_ads->value;
+	_savedMove    = touch_move_full->value;
 	_editing      = YES;
 	_selected     = -1;
 	_panel.hidden = NO;
@@ -656,6 +684,7 @@ static cvar_t *touch_startedit;
 		memcpy( _cfg, _saved, sizeof( _cfg ) );
 		Cvar_Set( "touch_look", va( "%g", _savedLook ) );
 		Cvar_Set( "touch_look_ads", va( "%g", _savedAds ) );
+		Cvar_Set( "touch_move_full", va( "%g", _savedMove ) );
 	}
 	_editing      = NO;
 	_selected     = -1;
@@ -667,8 +696,10 @@ static cvar_t *touch_startedit;
 {
 	_camSlider.value = touch_look->value;
 	_adsSlider.value = touch_look_ads->value;
+	_moveSlider.value = touch_move_full->value;
 	_camValue.text   = [NSString stringWithFormat:@"%.2f °/pt", touch_look->value];
 	_adsValue.text   = [NSString stringWithFormat:@"x%.2f", touch_look_ads->value];
+	_moveValue.text  = [NSString stringWithFormat:@"%d %%", (int)lroundf( touch_move_full->value * 100 )];
 
 	BOOL has = _selected >= 0;
 	_hideSwitch.enabled    = has;
@@ -731,6 +762,7 @@ static cvar_t *touch_startedit;
 	[self resetCfgToDefaults];
 	Cvar_Set( "touch_look", "0.25" );
 	Cvar_Set( "touch_look_ads", "0.6" );
+	Cvar_Set( "touch_move_full", "0.65" );
 	[self syncPanel];
 	[self refreshItems];
 }
@@ -759,18 +791,33 @@ static cvar_t *touch_startedit;
 	return self;
 }
 
-// topmost visible item under p, or -1
+// Button hit areas take priority over the stick, including custom layouts.
 - (int)itemAt:(CGPoint)p
 {
-	for ( int i = (int)NUM_ITEMS - 1; i >= 0; i-- ) {
+	// A button must keep its hit area even if the movable stick overlaps it.
+	for ( int i = (int)NUM_BUTTONS - 1; i >= 0; i-- ) {
 		if ( ![self visible:i] ) continue;
 		CGPoint c = [self centreOf:i];
-		CGFloat r = [self radiusOf:i] + ( (size_t)i == STICK_INDEX ? 8 : BUTTON_SLOP );
+		CGFloat r = [self radiusOf:i] + BUTTON_SLOP;
 		if ( hypot( p.x - c.x, p.y - c.y ) <= r ) {
 			return i;
 		}
 	}
+	if ( [self visible:STICK_INDEX] ) {
+		CGPoint c = [self centreOf:STICK_INDEX];
+		if ( hypot( p.x - c.x, p.y - c.y ) <= [self radiusOf:STICK_INDEX] + 8 ) {
+			return (int)STICK_INDEX;
+		}
+	}
 	return -1;
+}
+
+- (BOOL)hasActiveLook
+{
+	for ( int i = 0; i < MAX_TRACKED_TOUCHES; i++ ) {
+		if ( _touches[i].touch && _touches[i].role == ROLE_LOOK ) return YES;
+	}
+	return NO;
 }
 
 - (touchState_t *)stateFor:(UITouch *)t create:(BOOL)create
@@ -791,6 +838,7 @@ static cvar_t *touch_startedit;
 		touchState_t *st = [self stateFor:t create:YES];
 		if ( !st ) continue;
 		st->touch = t;
+		st->role  = ROLE_NONE;
 		st->last  = p;
 
 		if ( _editing ) {
@@ -833,8 +881,9 @@ static cvar_t *touch_startedit;
 			st->origin   = ( b == (int)STICK_INDEX ) ? [self centreOf:STICK_INDEX] : p;
 			_stickActive = YES;
 			[self drawStickKnobAt:p centre:st->origin];
-		} else {
-			st->role = ROLE_LOOK;
+		} else if ( b != (int)STICK_INDEX
+		            && p.x >= CGRectGetMinX( s ) + CGRectGetWidth( s ) * STICK_ZONE_WIDTH ) {
+			st->role = [self hasActiveLook] ? ROLE_LOOK_WAIT : ROLE_LOOK;
 		}
 	}
 }
@@ -879,7 +928,8 @@ static cvar_t *touch_startedit;
 			}
 			float x = 0, y = 0;
 			if ( m > STICK_DEADZONE ) {
-				float scale = ( m - STICK_DEADZONE ) / ( 1 - STICK_DEADZONE ) / m;
+				float full  = fminf( 1.0f, fmaxf( 0.45f, touch_move_full->value ) );
+				float scale = fminf( 1.0f, ( m - STICK_DEADZONE ) / ( full - STICK_DEADZONE ) ) / m;
 				x           = dx * scale;
 				y           = dy * scale;
 			}
@@ -887,6 +937,9 @@ static cvar_t *touch_startedit;
 			[self drawStickKnobAt:CGPointMake( st->origin.x + dx * radius, st->origin.y + dy * radius ) centre:st->origin];
 		} else if ( st->role == ROLE_LOOK ) {
 			[self sendLookDX:p.x - st->last.x dy:p.y - st->last.y];
+		} else if ( st->role == ROLE_LOOK_WAIT && ![self hasActiveLook] ) {
+			// Take over only after the previous look finger lifts; this move sets the origin.
+			st->role = ROLE_LOOK;
 		}
 		st->last = p;
 	}
@@ -951,6 +1004,7 @@ void IOS_TouchControls_Frame( int mode )
 
 		touch_look                 = Cvar_Get( "touch_look", "0.25", CVAR_ARCHIVE ); // degrees per point
 		touch_look_ads             = Cvar_Get( "touch_look_ads", "0.6", CVAR_ARCHIVE );
+		touch_move_full           = Cvar_Get( "touch_move_full", "0.65", CVAR_ARCHIVE );
 		touch_leanstrafe           = Cvar_Get( "touch_leanstrafe", "1", CVAR_ARCHIVE );
 		touch_lean_start           = Cvar_Get( "touch_lean_start", "0.25", CVAR_ARCHIVE );
 		touch_lean_stop            = Cvar_Get( "touch_lean_stop", "0.12", CVAR_ARCHIVE );
