@@ -252,6 +252,32 @@ static void APIENTRY GLimp_GLES_PolygonMode( GLenum face, GLenum mode ) {
 	// unsupported
 }
 
+// Desktop-only functions that OpenGL ES lacks; they are only used by debug/capture paths of the renderer
+static void APIENTRY GLimp_GLES_CallList( GLuint list ) {
+	// unsupported
+}
+
+static void APIENTRY GLimp_GLES_DrawPixels( GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels ) {
+	// unsupported
+}
+
+static void APIENTRY GLimp_GLES_Fogi( GLenum pname, GLint param ) {
+	// unsupported
+}
+
+static void APIENTRY GLimp_GLES_LineStipple( GLint factor, GLushort pattern ) {
+	// unsupported
+}
+
+static void APIENTRY GLimp_GLES_PixelZoom( GLfloat xfactor, GLfloat yfactor ) {
+	// unsupported
+}
+
+static qboolean GLimp_GLES_IsDesktopOnly( const char *name ) {
+	return !strcmp( name, "CallList" ) || !strcmp( name, "DrawPixels" ) || !strcmp( name, "Fogi" )
+		|| !strcmp( name, "LineStipple" ) || !strcmp( name, "PixelZoom" );
+}
+
 /*
 ===============
 GLimp_GetProcAddresses
@@ -267,7 +293,7 @@ static qboolean GLimp_GetProcAddresses( qboolean fixedFunction ) {
 #define GLE( ret, name, ... ) qgl##name = gl#name;
 #else
 #define GLE( ret, name, ... ) qgl##name = (name##proc *) SDL_GL_GetProcAddress("gl" #name); \
-	if ( qgl##name == NULL ) { \
+	if ( qgl##name == NULL && !( qglesMajorVersion >= 2 && GLimp_GLES_IsDesktopOnly( #name ) ) ) { \
 		ri.Printf( PRINT_ALL, "ERROR: Missing OpenGL function %s\n", "gl" #name ); \
 		success = qfalse; \
 	}
@@ -338,6 +364,11 @@ static qboolean GLimp_GetProcAddresses( qboolean fixedFunction ) {
 			qglDepthRange = GLimp_GLES_DepthRange;
 			qglDrawBuffer = GLimp_GLES_DrawBuffer;
 			qglPolygonMode = GLimp_GLES_PolygonMode;
+			qglCallList = GLimp_GLES_CallList;
+			qglDrawPixels = GLimp_GLES_DrawPixels;
+			qglFogi = GLimp_GLES_Fogi;
+			qglLineStipple = GLimp_GLES_LineStipple;
+			qglPixelZoom = GLimp_GLES_PixelZoom;
 		} else {
 			Com_Error( ERR_FATAL, "Unsupported OpenGL Version (%s), OpenGL 2.0 is required", version );
 		}

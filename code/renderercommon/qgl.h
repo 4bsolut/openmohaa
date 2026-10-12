@@ -26,7 +26,151 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __QGL_H__
 #define __QGL_H__
 
-#ifdef USE_INTERNAL_SDL_HEADERS
+#if defined(__IPHONEOS__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+// SDL_opengl.h is empty on iOS, use the OpenGL ES 3.0 headers shipped with the SDK
+#	include <OpenGLES/ES3/gl.h>
+#	include <OpenGLES/ES3/glext.h>
+#	ifndef APIENTRY
+#		define APIENTRY
+#	endif
+#	ifndef APIENTRYP
+#		define APIENTRYP APIENTRY *
+#	endif
+
+// Desktop-only types and enums still referenced by shared renderer code.
+// Values are the desktop OpenGL ones; they only need to compile, the paths using them are not valid on ES.
+typedef double GLdouble;
+typedef double GLclampd;
+#	ifndef GL_FILL
+#		define GL_FILL 0x1B02
+#	endif
+#	ifndef GL_LINE
+#		define GL_LINE 0x1B01
+#	endif
+#	ifndef GL_RGBA16
+#		define GL_RGBA16 0x805B
+#	endif
+#	ifndef GL_STACK_OVERFLOW
+#		define GL_STACK_OVERFLOW 0x0503
+#	endif
+#	ifndef GL_STACK_UNDERFLOW
+#		define GL_STACK_UNDERFLOW 0x0504
+#	endif
+#	ifndef GL_SAMPLES_PASSED
+#		define GL_SAMPLES_PASSED 0x8914
+#	endif
+#	ifndef GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER
+#		define GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER 0x8CDC
+#	endif
+#	ifndef GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER
+#		define GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER 0x8CDB
+#	endif
+#	ifndef GL_DEPTH_COMPONENT16_ARB
+#		define GL_DEPTH_COMPONENT16_ARB 0x81A5
+#	endif
+#	ifndef GL_COLOR_ATTACHMENT0_EXT
+#		define GL_COLOR_ATTACHMENT0_EXT 0x8CE0
+#	endif
+#	ifndef GL_BACK_LEFT
+#		define GL_BACK_LEFT 0x0402
+#	endif
+#	ifndef GL_BACK_RIGHT
+#		define GL_BACK_RIGHT 0x0403
+#	endif
+#	ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+#		define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#	endif
+#	ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+#		define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#	endif
+#	ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+#		define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+#	endif
+#	ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#		define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#	endif
+#	ifndef GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+#		define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 0x8C4C
+#	endif
+#	ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+#		define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
+#	endif
+#	ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
+#		define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 0x8C4E
+#	endif
+#	ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+#		define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
+#	endif
+#	ifndef GL_DEPTH_COMPONENT24_ARB
+#		define GL_DEPTH_COMPONENT24_ARB 0x81A6
+#	endif
+#	ifndef GL_DEPTH_COMPONENT32
+#		define GL_DEPTH_COMPONENT32 0x81A7
+#	endif
+#	ifndef GL_DEPTH_COMPONENT32_ARB
+#		define GL_DEPTH_COMPONENT32_ARB 0x81A7
+#	endif
+#	ifndef GL_LUMINANCE8
+#		define GL_LUMINANCE8 0x8040
+#	endif
+#	ifndef GL_LUMINANCE8_ALPHA8
+#		define GL_LUMINANCE8_ALPHA8 0x8045
+#	endif
+#	ifndef GL_MAX_TEXTURE_UNITS_ARB
+#		define GL_MAX_TEXTURE_UNITS_ARB 0x84E2
+#	endif
+#	ifndef GL_RGB4_S3TC
+#		define GL_RGB4_S3TC 0x83A1
+#	endif
+#	ifndef GL_RGB5
+#		define GL_RGB5 0x8050
+#	endif
+#	ifndef GL_SLUMINANCE_ALPHA_EXT
+#		define GL_SLUMINANCE_ALPHA_EXT 0x8C44
+#	endif
+#	ifndef GL_SLUMINANCE_EXT
+#		define GL_SLUMINANCE_EXT 0x8C46
+#	endif
+#	ifndef GL_SLUMINANCE8_ALPHA8_EXT
+#		define GL_SLUMINANCE8_ALPHA8_EXT 0x8C45
+#	endif
+#	ifndef GL_SLUMINANCE8_EXT
+#		define GL_SLUMINANCE8_EXT 0x8C47
+#	endif
+#	ifndef GL_SRGB_ALPHA_EXT
+#		define GL_SRGB_ALPHA_EXT 0x8C42
+#	endif
+#	ifndef GL_SRGB_EXT
+#		define GL_SRGB_EXT 0x8C40
+#	endif
+#	ifndef GL_SRGB8_ALPHA8_EXT
+#		define GL_SRGB8_ALPHA8_EXT 0x8C43
+#	endif
+#	ifndef GL_SRGB8_EXT
+#		define GL_SRGB8_EXT 0x8C41
+#	endif
+#	ifndef GL_STENCIL_INDEX
+#		define GL_STENCIL_INDEX 0x1901
+#	endif
+#	ifndef GL_STENCIL_INDEX1
+#		define GL_STENCIL_INDEX1 0x8D46
+#	endif
+#	ifndef GL_STENCIL_INDEX4
+#		define GL_STENCIL_INDEX4 0x8D47
+#	endif
+#	ifndef GL_STENCIL_INDEX16
+#		define GL_STENCIL_INDEX16 0x8D49
+#	endif
+#	ifndef GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB
+#		define GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB 0x8515
+#	endif
+#	ifndef GL_DEPTH_TEXTURE_MODE
+#		define GL_DEPTH_TEXTURE_MODE 0x884B
+#	endif
+#	ifndef GL_COMPARE_R_TO_TEXTURE
+#		define GL_COMPARE_R_TO_TEXTURE 0x884E
+#	endif
+#elif defined(USE_INTERNAL_SDL_HEADERS)
 #	include "SDL_opengl.h"
 #else
 #	include <SDL_opengl.h>
