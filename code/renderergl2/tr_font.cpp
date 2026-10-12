@@ -521,7 +521,9 @@ void R_LoadFontShader(fontheader_sgl_t* font)
     save = r_sequencenumber;
     r_sequencenumber = -1;
     Com_sprintf(filename, sizeof(filename), "gfx/fonts/%s", font->name);
-    font->shader = R_FindShader(filename, -1, qfalse);
+    // Font atlases are UI content, including when their shader is explicit.
+    // Register them as 2D so the shader does not test against the scene depth.
+    font->shader = R_FindShader(filename, LIGHTMAP_2D, qfalse);
     r_sequencenumber = save;
 
     if (!font->shader) {
