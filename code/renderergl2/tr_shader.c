@@ -3882,6 +3882,16 @@ static shader_t *FinishShader( void ) {
 	//
 	stage = CollapseStagesToGLSL();
 
+	// Explicit shaders used by the UI need the same depth state as implicit
+	// 2D shaders. Otherwise the menu can be hidden by the startup depth buffer.
+	if ( shader.lightmapIndex == LIGHTMAP_2D ) {
+		int i;
+
+		for ( i = 0; i < stage; i++ ) {
+			stages[i].stateBits |= GLS_DEPTHTEST_DISABLE;
+		}
+	}
+
 	if ( shader.lightmapIndex >= 0 && !hasLightmapStage ) {
 		if (vertexLightmap) {
 			ri.Printf( PRINT_DEVELOPER, "WARNING: shader '%s' has VERTEX forced lightmap!\n", shader.name );
