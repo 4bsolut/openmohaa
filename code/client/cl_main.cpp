@@ -73,6 +73,10 @@ cvar_t	*cl_aviFrameRate;
 cvar_t	*cl_aviMotionJpeg;
 cvar_t	*cl_forceavidemo;
 
+#ifdef __IPHONEOS__
+static cvar_t *ios_diag;
+#endif
+
 cvar_t	*cl_freelook;
 cvar_t	*cl_sensitivity;
 
@@ -2677,6 +2681,78 @@ CL_Frame
 
 ==================
 */
+#ifdef __IPHONEOS__
+static void CL_IOSDiagnosticFrame(void)
+{
+	static int started;
+	static int previousFrame;
+	static int previousSnapshot;
+	static int previousOutgoing;
+	static int frames;
+	static int frameTotal;
+	static int frameMax;
+	static int framesOver25;
+	static int framesOver50;
+	static int snapshots;
+	static int snapshotGaps;
+	static int delayedSnapshots;
+	static int pingTotal;
+	static int pingMax;
+	int now;
+	int elapsed;
+	int frameTime;
+	int outgoing;
+
+	if (!ios_diag || !ios_diag->integer || clc.state != CA_ACTIVE) {
+		started = 0;
+		return;
+	}
+
+	now = Sys_Milliseconds();
+	if (!started) {
+		started = now;
+		previousFrame = now;
+		previousSnapshot = cl.snap.messageNum;
+		previousOutgoing = clc.netchan.outgoingSequence;
+		frames = frameTotal = frameMax = framesOver25 = framesOver50 = 0;
+		snapshots = snapshotGaps = delayedSnapshots = pingTotal = pingMax = 0;
+		return;
+	}
+
+	frameTime = now - previousFrame;
+	previousFrame = now;
+	frames++;
+	frameTotal += frameTime;
+	if (frameTime > frameMax) frameMax = frameTime;
+	if (frameTime > 25) framesOver25++;
+	if (frameTime > 50) framesOver50++;
+
+	if (cl.snap.valid && cl.snap.messageNum != previousSnapshot) {
+		if (cl.snap.messageNum > previousSnapshot + 1) snapshotGaps += cl.snap.messageNum - previousSnapshot - 1;
+		previousSnapshot = cl.snap.messageNum;
+		snapshots++;
+		pingTotal += cl.snap.ping;
+		if (cl.snap.ping > pingMax) pingMax = cl.snap.ping;
+		if (cl.snap.snapFlags & SNAPFLAG_RATE_DELAYED) delayedSnapshots++;
+	}
+
+	elapsed = now - started;
+	if (elapsed < 1000) return;
+
+	outgoing = clc.netchan.outgoingSequence;
+	Com_Printf("IOS_DIAG frame interval_ms=%d local=%d fps=%.1f frame_avg_ms=%.1f frame_max_ms=%d over25=%d over50=%d ping_avg_ms=%d ping_max_ms=%d snapshots=%d snapshot_gaps=%d rate_delayed=%d outgoing_packets=%d last_packet_age_ms=%d server_delta_ms=%d\n",
+		elapsed, com_sv_running->integer, frames * 1000.0 / elapsed,
+		frames ? (double)frameTotal / frames : 0.0, frameMax,
+		framesOver25, framesOver50, snapshots ? pingTotal / snapshots : -1,
+		snapshots ? pingMax : -1, snapshots, snapshotGaps, delayedSnapshots,
+		outgoing - previousOutgoing, cls.realtime - clc.lastPacketTime, cl.serverTimeDelta);
+	started = now;
+	previousOutgoing = outgoing;
+	frames = frameTotal = frameMax = framesOver25 = framesOver50 = 0;
+	snapshots = snapshotGaps = delayedSnapshots = pingTotal = pingMax = 0;
+}
+#endif
+
 void CL_Frame ( int msec ) {
 
 	if ( !com_cl_running->integer ) {
@@ -2846,6 +2922,10 @@ void CL_Frame ( int msec ) {
 	SCR_RunCinematic();
 
 	cls.framecount++;
+
+#ifdef __IPHONEOS__
+	CL_IOSDiagnosticFrame();
+#endif
 }
 
 
@@ -3594,6 +3674,9 @@ void CL_Init( void ) {
 	cl_timedemo = Cvar_Get ("timedemo", "0", 0);
 	cl_timedemoLog = Cvar_Get ("cl_timedemoLog", "", CVAR_ARCHIVE);
 	cl_autoRecordDemo = Cvar_Get ("cl_autoRecordDemo", "0", CVAR_ARCHIVE);
+#ifdef __IPHONEOS__
+	ios_diag = Cvar_Get("ios_diag", "0", CVAR_ARCHIVE);
+#endif
 	cl_aviFrameRate = Cvar_Get ("cl_aviFrameRate", "25", CVAR_ARCHIVE);
 	cl_aviMotionJpeg = Cvar_Get ("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
 	cl_forceavidemo = Cvar_Get ("cl_forceavidemo", "0", 0);

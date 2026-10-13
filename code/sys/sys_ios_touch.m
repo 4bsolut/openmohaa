@@ -109,12 +109,14 @@ static cvar_t *touch_leanstrafe;
 static cvar_t *touch_lean_start;
 static cvar_t *touch_lean_stop;
 static cvar_t *touch_startedit;
+static cvar_t *ios_diag;
 
 @class MohaaTouchOverlay;
 @interface MohaaTouchOverlay : UIView
 @property( nonatomic ) int mode; // 1: gameplay (controls shown); anything else: hidden, touches go to SDL
 - (void)releaseAll;
 - (void)enterEditor;
+- (void)logDiagnostics;
 @end
 
 @implementation MohaaTouchOverlay {
@@ -148,6 +150,13 @@ static cvar_t *touch_startedit;
 	UILabel       *_adsValue;
 	UILabel       *_moveValue;
 	float          _savedLook, _savedAds, _savedMove;
+	int            _diagStarted;
+	int            _diagLookMoves;
+	int            _diagStickMoves;
+	int            _diagButtons;
+	int            _diagEventAgeCount;
+	double         _diagEventAgeTotal;
+	double         _diagEventAgeMax;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -880,6 +889,7 @@ static cvar_t *touch_startedit;
 			}
 			st->role   = b == AIM_FIRE_BUTTON ? ( [self hasActiveLook] ? ROLE_FIRE_WAIT : ROLE_FIRE_LOOK ) : ROLE_BUTTON;
 			st->button = b;
+			if (ios_diag && ios_diag->integer) _diagButtons++;
 			Com_Printf( "touch: button %s -> key %d\n", buttonDefs[b].name, buttonDefs[b].key );
 			[self key:buttonDefs[b].key down:YES];
 			[self setPressed:YES forButton:b];
@@ -932,6 +942,7 @@ static cvar_t *touch_startedit;
 			_cfg[st->button].fy = ( y - CGRectGetMinY( s ) ) / CGRectGetHeight( s );
 			[self refreshItems];
 		} else if ( st->role == ROLE_STICK ) {
+			if (ios_diag && ios_diag->integer) _diagStickMoves++;
 			CGFloat radius = STICK_RADIUS * _cfg[STICK_INDEX].scale;
 			CGFloat dx     = ( p.x - st->origin.x ) / radius;
 			CGFloat dy     = ( p.y - st->origin.y ) / radius;
@@ -951,6 +962,7 @@ static cvar_t *touch_startedit;
 			[self sendStickX:x y:y];
 			[self drawStickKnobAt:CGPointMake( st->origin.x + dx * radius, st->origin.y + dy * radius ) centre:st->origin];
 		} else if ( st->role == ROLE_LOOK || st->role == ROLE_FIRE_LOOK ) {
+			if (ios_diag && ios_diag->integer) _diagLookMoves++;
 			[self sendLookDX:p.x - st->last.x dy:p.y - st->last.y];
 		} else if ( st->role == ROLE_LOOK_WAIT && ![self hasActiveLook] ) {
 			// Take over only after the previous look finger lifts; this move sets the origin.
@@ -959,7 +971,40 @@ static cvar_t *touch_startedit;
 			st->role = ROLE_FIRE_LOOK;
 		}
 		st->last = p;
+		if (ios_diag && ios_diag->integer && (st->role == ROLE_STICK || st->role == ROLE_LOOK || st->role == ROLE_FIRE_LOOK)) {
+			double age = (CACurrentMediaTime() - t.timestamp) * 1000.0;
+			if (age >= 0.0 && age < 1000.0) {
+				_diagEventAgeCount++;
+				_diagEventAgeTotal += age;
+				if (age > _diagEventAgeMax) _diagEventAgeMax = age;
+			}
+		}
 	}
+}
+
+- (void)logDiagnostics
+{
+	if (!ios_diag || !ios_diag->integer || _mode != 1) {
+		_diagStarted = 0;
+		_diagLookMoves = _diagStickMoves = _diagButtons = _diagEventAgeCount = 0;
+		_diagEventAgeTotal = _diagEventAgeMax = 0.0;
+		return;
+	}
+
+	int now = Sys_Milliseconds();
+	if (!_diagStarted) {
+		_diagStarted = now;
+		return;
+	}
+	if (now - _diagStarted < 1000) return;
+
+	Com_Printf("IOS_DIAG touch interval_ms=%d look_moves=%d stick_moves=%d buttons=%d event_age_avg_ms=%.1f event_age_max_ms=%.1f\n",
+		now - _diagStarted, _diagLookMoves, _diagStickMoves, _diagButtons,
+		_diagEventAgeCount ? _diagEventAgeTotal / _diagEventAgeCount : -1.0,
+		_diagEventAgeCount ? _diagEventAgeMax : -1.0);
+	_diagStarted = now;
+	_diagLookMoves = _diagStickMoves = _diagButtons = _diagEventAgeCount = 0;
+	_diagEventAgeTotal = _diagEventAgeMax = 0.0;
 }
 
 - (void)endTouches:(NSSet<UITouch *> *)touches
@@ -1026,6 +1071,7 @@ void IOS_TouchControls_Frame( int mode )
 		touch_lean_start           = Cvar_Get( "touch_lean_start", "0.25", CVAR_ARCHIVE );
 		touch_lean_stop            = Cvar_Get( "touch_lean_stop", "0.12", CVAR_ARCHIVE );
 		touch_startedit            = Cvar_Get( "touch_startedit", "0", CVAR_TEMP ); // open the HUD editor on start (debug)
+		ios_diag                   = Cvar_Get( "ios_diag", "0", CVAR_ARCHIVE );
 
 		UIWindow *uiWindow = info.info.uikit.window;
 		overlay            = [[MohaaTouchOverlay alloc] initWithFrame:uiWindow.bounds];
@@ -1034,6 +1080,7 @@ void IOS_TouchControls_Frame( int mode )
 	}
 
 	overlay.mode = mode;
+	[overlay logDiagnostics];
 
 	// debug cvar: open the editor once gameplay has been stable for a while (menus can flicker right at spawn)
 	static int stableFrames;
