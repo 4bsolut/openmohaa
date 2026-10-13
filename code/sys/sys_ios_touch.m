@@ -42,13 +42,17 @@ or (at your option) any later version.
 #define STICK_DEADZONE      0.08
 #define STICK_ZONE_WIDTH    0.42   // left fraction of the screen where a touch starts the stick
 #define BUTTON_SLOP         10.0   // extra points around a button that still hit it
+#define AIM_FIRE_BUTTON     0      // right fire button can also drag the camera
 #define KEY_EDIT_LAYOUT     (-1)   // pseudo key: opens the HUD editor
 #define LAYOUT_DEFAULTS_KEY @"MohaaTouchLayout.v2"
 #define LOOK_DEFAULTS_KEY   @"MohaaTouchLook"
 #define LOOK_ADS_DEFAULTS_KEY @"MohaaTouchLookADS"
 #define MOVE_FULL_DEFAULTS_KEY @"MohaaTouchMoveFull"
 
-typedef enum { ROLE_NONE, ROLE_STICK, ROLE_LOOK, ROLE_LOOK_WAIT, ROLE_BUTTON, ROLE_EDIT_DRAG } touchRole_t;
+typedef enum {
+	ROLE_NONE, ROLE_STICK, ROLE_LOOK, ROLE_LOOK_WAIT, ROLE_BUTTON,
+	ROLE_FIRE_LOOK, ROLE_FIRE_WAIT, ROLE_EDIT_DRAG
+} touchRole_t;
 
 typedef struct {
 	const char *name;   // shown in the editor
@@ -815,9 +819,18 @@ static cvar_t *touch_startedit;
 - (BOOL)hasActiveLook
 {
 	for ( int i = 0; i < MAX_TRACKED_TOUCHES; i++ ) {
-		if ( _touches[i].touch && _touches[i].role == ROLE_LOOK ) return YES;
+		if ( _touches[i].touch && ( _touches[i].role == ROLE_LOOK || _touches[i].role == ROLE_FIRE_LOOK ) ) return YES;
 	}
 	return NO;
+}
+
+- (void)yieldFireLookToFreeLook
+{
+	for ( int i = 0; i < MAX_TRACKED_TOUCHES; i++ ) {
+		if ( _touches[i].touch && _touches[i].role == ROLE_FIRE_LOOK ) {
+			_touches[i].role = ROLE_FIRE_WAIT;
+		}
+	}
 }
 
 - (touchState_t *)stateFor:(UITouch *)t create:(BOOL)create
@@ -865,7 +878,7 @@ static cvar_t *touch_startedit;
 				st->touch = nil;
 				continue;
 			}
-			st->role   = ROLE_BUTTON;
+			st->role   = b == AIM_FIRE_BUTTON ? ( [self hasActiveLook] ? ROLE_FIRE_WAIT : ROLE_FIRE_LOOK ) : ROLE_BUTTON;
 			st->button = b;
 			Com_Printf( "touch: button %s -> key %d\n", buttonDefs[b].name, buttonDefs[b].key );
 			[self key:buttonDefs[b].key down:YES];
@@ -883,6 +896,8 @@ static cvar_t *touch_startedit;
 			[self drawStickKnobAt:p centre:st->origin];
 		} else if ( b != (int)STICK_INDEX
 		            && p.x >= CGRectGetMinX( s ) + CGRectGetWidth( s ) * STICK_ZONE_WIDTH ) {
+			// A separate camera finger takes priority over drag-to-aim on the fire button.
+			[self yieldFireLookToFreeLook];
 			st->role = [self hasActiveLook] ? ROLE_LOOK_WAIT : ROLE_LOOK;
 		}
 	}
@@ -935,11 +950,13 @@ static cvar_t *touch_startedit;
 			}
 			[self sendStickX:x y:y];
 			[self drawStickKnobAt:CGPointMake( st->origin.x + dx * radius, st->origin.y + dy * radius ) centre:st->origin];
-		} else if ( st->role == ROLE_LOOK ) {
+		} else if ( st->role == ROLE_LOOK || st->role == ROLE_FIRE_LOOK ) {
 			[self sendLookDX:p.x - st->last.x dy:p.y - st->last.y];
 		} else if ( st->role == ROLE_LOOK_WAIT && ![self hasActiveLook] ) {
 			// Take over only after the previous look finger lifts; this move sets the origin.
 			st->role = ROLE_LOOK;
+		} else if ( st->role == ROLE_FIRE_WAIT && ![self hasActiveLook] ) {
+			st->role = ROLE_FIRE_LOOK;
 		}
 		st->last = p;
 	}
@@ -954,7 +971,7 @@ static cvar_t *touch_startedit;
 			[self sendStickX:0 y:0];
 			_stickActive = NO;
 			[self refreshItems];
-		} else if ( st->role == ROLE_BUTTON ) {
+		} else if ( st->role == ROLE_BUTTON || st->role == ROLE_FIRE_LOOK || st->role == ROLE_FIRE_WAIT ) {
 			int k = buttonDefs[st->button].key;
 			if ( k != K_MWHEELUP && k != '5' ) {
 				[self key:k down:NO];
