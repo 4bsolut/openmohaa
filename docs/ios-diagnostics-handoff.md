@@ -1,0 +1,13 @@
+# Estado para retomar el diagnóstico en iPhone
+
+Proyecto: fork `4bsolut/openmohaa`, rama `ios-mobile`, fuente local en `/Users/jrequena/orca/projects/mohaa-mp-movil/openmohaa`. El contenedor de la app iOS está en `/Users/jrequena/orca/projects/mohaa-mp-movil`; bundle ID `com.jrequena.mohaamobile.dev`. iPhone físico `00008140-001865102179801C`.
+
+El usuario percibe que el multijugador online se siente menos fluido que Call of Duty: Mobile. Se acordó medir antes de cambiar controles, red o assets. El commit `638c518` agregó `ios_diag` en `code/client/cl_main.cpp` y `code/sys/sys_ios_touch.m`. Con `ios_diag 1`, cada segundo se escriben líneas `IOS_DIAG frame` y `IOS_DIAG touch` en `Library/Application Support/openmohaa/main/qconsole.log` del contenedor de la app. Las métricas incluyen FPS e intervalos de fotograma, ping, llegadas y huecos de snapshots, paquetes salientes, edad del último paquete, movimientos de cámara y joystick, botones y edad de eventos UIKit. Con `ios_diag 0` se desactiva.
+
+La versión se compiló para simulador y dispositivo, se firmó y se instaló en el iPhone. Se copió `seta ios_diag "1"` a `Library/Application Support/openmohaa/main/configs/omconfig.cfg` y se verificó la copia con SHA-256. Los paquetes del juego siguieron presentes después de actualizar la app. No se verificaron líneas `IOS_DIAG` en una partida: el intento de abrir la app mediante `devicectl` falló porque el teléfono estaba bloqueado.
+
+Siguiente paso: pedir al usuario que juegue unos minutos en local y luego online, anotando la hora aproximada de cada episodio de retraso. Extraer `qconsole.log` con `xcrun devicectl device copy from --device 00008140-001865102179801C --source 'Library/Application Support/openmohaa/main/qconsole.log' --destination /private/tmp/mohaa-diag.log --domain-type appDataContainer --domain-identifier com.jrequena.mohaamobile.dev`. Confirmar que aparecen líneas `IOS_DIAG`; comparar las ventanas local y online antes de tocar parámetros. Si no aparecen, comprobar que `ios_diag` permanece en `1` tras iniciar la app. El registro actual se reescribe en cada arranque, por lo que conviene extraerlo antes de reiniciar otra vez.
+
+La mejora visual de la caseta de Stalingrado quedó aprobada e instalada. El motor carga JPG antes que TGA cuando un material solicita TGA; por eso el paquete v2 contiene ambos formatos. Último commit de esa etapa: `0594f35`.
+
+Preferencia del usuario: avanzar en pasos pequeños, minimizar pruebas repetidas y despliegues al móvil. AGENTS.md exige terminar cada etapa con un commit cuyo mensaje tenga, en orden, Implementado, Decisiones, Pruebas, Peticiones y Riesgos pendientes. No agregar comentarios al código fuente.
